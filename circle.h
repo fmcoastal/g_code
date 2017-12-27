@@ -45,7 +45,6 @@ extern void arc_ij(float x, float y, float i, float j, float f);
 
 extern void arc_r(float x, float y, float r, float f);
 
-
 #endif
 
 

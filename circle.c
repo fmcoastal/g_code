@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <math.h>       // need -lm for linking
 
+#include "g_code.h"
 #include "circle.h"
 
 /*
@@ -334,10 +335,22 @@ return 0;
 }
 
 
-float g_xc = 0;
-float g_yc = 0;
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+
+float g_xc = 2;              // current position x
+float g_yc = 3.828427125;    // current position y
+float g_CirclePoints = 10;   // number of points to create around the circle
 
 #define PI  3.1415926535
+
+
 
 
 
@@ -358,14 +371,190 @@ int   n;
 float xc = g_xc;
 float yc = g_yc;
 
-
-steps = 10;
-
+steps = g_CirclePoints;
     
 // for not assume relative i,j
-   printf(" i  %f\n", i);
-   printf(" j  %f\n", j);
+   printf("[%d]%s:%s  i  %f\n",__LINE__,__FILE__,__FUNCTION__, i);
+   printf("[%d]%s:%s  j  %f\n",__LINE__,__FILE__,__FUNCTION__, j);
+   printf("[%d]%s:%s  x (end)  %f\n",__LINE__,__FILE__,__FUNCTION__, x);
+   printf("[%d]%s:%s  y (end)  %f\n",__LINE__,__FILE__,__FUNCTION__, y);
  
+   if(g_ArcCenter == INC_POSITIONING)
+   {
+       x_cntr = xc + i;
+       y_cntr = yc + j;
+   }
+   else
+   {
+       x_cntr =  i;
+       y_cntr =  j;
+   }
+
+   r  = sqrt( (x_cntr - x)* (x_cntr - x) + (y_cntr - y) * (y_cntr - y));
+
+   printf(" xstart  %f\n", xc);
+   printf(" ystart  %f\n", yc);
+   printf(" xcenter  %f\n", x_cntr);
+   printf(" ycenter  %f\n", y_cntr);
+ 
+   // calculat the start angle
+   dx = xc - x_cntr ;
+   dy = yc - y_cntr ;
+   printf(" dy  %f  dx   %f     dy/dx  %f\n",dy, dx, (dy/dx));
+   if( (dy == 0) && (dx < 0))
+   {
+      s_theta = PI;
+   }
+   else
+   {   
+      s_theta = atan( dy/dx);
+   }
+   printf(" start_theta  %f rad   %f Deg\n", s_theta, s_theta*180/PI);
+
+   // calculat the end angle
+   dx = x - x_cntr ;
+   dy = y - y_cntr ;
+   printf(" xend    %f\n", x);
+   printf(" yend    %f\n", y);
+   printf(" xcenter  %f\n", x_cntr);
+   printf(" ycenter  %f\n", y_cntr);
+   printf(" dy  %f  dx   %f     dy/dx  %f\n",dy, dx, (dy/dx));
+   if( (dy == 0) && (dx < 0))
+   {
+      e_theta = PI;
+   }
+   else
+   {   
+      e_theta = atan( dy/dx);
+   }
+ 
+   printf(" end_theta  %f rad   %f Deg\n", e_theta, e_theta*180/PI);
+   // calculate the delta angle  
+   d_theta = (e_theta - s_theta)/steps;
+
+   printf(" radius  %f\n", r); 
+
+   printf("         theta       cos(t)           x          sin(t)           y  \n");     
+   printf("         ------------------------------------------------------------\n");     
+   for(n = 0 ; n <= steps ; n++)
+   {
+      float theta,xt,yt;
+      
+      theta = d_theta * n + s_theta;
+      xt = x_cntr + r * cos(theta);
+      yt = y_cntr + r * sin(theta);
+      
+      printf("%2d)\t%f\t%f\t%f\t%f\t%f\n",n,theta, cos(theta),xt,sin(theta),yt);     
+
+
+   }
+
+   printf("[%d]%s:%s\n",__LINE__,__FILE__,__FUNCTION__);
+
+}
+
+
+// format2  - specify R 
+// let h be the x center
+// let y be the y center
+// let x be a point on the circle
+// Let y be a point on the circle
+// Equation of a circle:     sqrt ( (x - h)(x-h) + (y-k)(y-k)) = r 
+
+
+ 
+void arc_r(float x, float y, float r, float f)
+{
+float x_cntr;
+float y_cntr;
+
+float s_theta;  // start theta
+float e_theta;  // end theta
+float d_theta;  // end theta
+float steps;
+float r_local;
+
+float dy,dx;
+float mid_y,mid_x;
+
+float slope , b;
+int   n;
+float A,B,C;
+float h1,h2,k1,k2;
+
+float xc = g_xc;
+float yc = g_yc;
+int MinorCircle = TRUE;
+
+// for not assume  i,j
+   printf("[%d]%s:%s  radius r  %f\n",__LINE__,__FILE__,__FUNCTION__, r);
+   printf("[%d]%s:%s  start  x  %f\n",__LINE__,__FILE__,__FUNCTION__, xc);
+   printf("[%d]%s:%s  start  y  %f\n",__LINE__,__FILE__,__FUNCTION__, yc);
+   printf("[%d]%s:%s  end    x  %f\n",__LINE__,__FILE__,__FUNCTION__, x);
+   printf("[%d]%s:%s  end    y  %f\n",__LINE__,__FILE__,__FUNCTION__, y);
+ 
+
+ 
+   steps = g_CirclePoints;
+
+//  find the center....  
+//      The detail here is knowing the sign of the Radius
+//      and the direction of cut ?????? 
+   // validate Radius info  
+   if (r == 0) return ;  // why have a radius of 0
+   MinorCircle = r > 0 ? TRUE : FALSE ;
+
+
+// make a chord between start P1 and end P2 on the cycle.
+   dy = y - yc;    // y2 - y1
+   dx = x - xc;    // x2 - x1
+
+   mid_x = xc + dx/2;
+   mid_y = yc + dy/2;
+
+   slope = -1*dx/dy;    // reversed be cause we want slope of Perpendicular Bisector  
+    
+   b = mid_y - (slope * mid_x);
+
+   printf(" dy   %f      dx  %f   \n",dy,dx);
+   printf(" mid_y   %f     mid_x  %f   \n",mid_y,mid_x);
+   printf(" slope   %f      b  %f   \n",slope,b);
+   //  k  = slope * h + b
+
+   // so now we have the equation of a line which is the perpendicular bisector of
+   //   the chord between the two points. 
+
+   // and we know that  (x-h)(x-h)+(y-k)(y-k) = r*r
+   //                   xx -2xh + hh + yy -2yk + kk = rr
+  
+   // substitute  (y= mx + b) for center point of the circle so  k = sh+b
+   //
+   //          xx -2xh + hh + yy -2y(sh+b)   + (sh+b)*(sh+b) = rr         
+   //          xx -2xh + hh + yy -2ysh -2yb  +  sshh + 2bsh + bb = rr
+   //  put in form of quadratic
+   //         hh (1+ss) + h (-2x -2ys+2sb) + (xx + yy -2yb +bb -rr) =0       
+
+   // (-B +/- Sqrt(BB -4AC))/2A
+
+   //Calculate A, B, and C based on 
+   A = 1 + slope*slope;
+   B = (-2*x) + (-2*y*slope) + (2 *slope *b);
+   C = x*x + (y*y) - (2*y*b) + (b * b) - (r * r);
+
+   printf(" A  %f      B  %f    C %f\n",A,B,C);
+
+   h1 = ((-1*B) + sqrt ( B * B - 4 *A*C))/ (2 * A);
+   h2 = ((-1*B) - sqrt ( B * B - 4 *A*C))/ (2 * A);
+   k1 = h1*slope +b;   
+   k2 = h2*slope +b;   
+
+   printf(" h1  %f      k1  %f    \n",h1,k1);
+   printf(" h2  %f      k2  %f    \n",h2,k2);
+
+   arc_ij(x, y, h2, k2, 1);
+
+#if 0
+
    x_cntr = xc + i;
    y_cntr = yc + j;
 
@@ -425,14 +614,7 @@ steps = 10;
 
 
    }
+#endif
 
 
-
-}
-
-
-// format2  - specify R 
- 
-void arc_r(float x, float y, float r, float f)
-{
 }
